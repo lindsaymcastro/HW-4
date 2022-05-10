@@ -1,0 +1,198 @@
+---
+title: "Homework 4"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: show
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+
+## Resampling 
+
+```{r, message=FALSE}
+library(tidymodels)
+library(tidyverse)
+library(ISLR) 
+library(ISLR2) 
+library(discrim)
+library(poissonreg)
+library(corrr)
+library(corrplot)
+library(klaR) 
+library(pROC)
+tidymodels_prefer()
+```
+
+```{r, message=FALSE}
+titanic <- read_csv(file = "homework-4/data/titanic.csv") %>% 
+  mutate(survived = factor(survived, 
+                           levels = c("Yes", "No")),
+         pclass = factor(pclass))
+```
+
+
+### Question 1 
+```{r}
+set.seed(0714)
+
+#Split the data
+titanic_split <- initial_split(titanic, strata = survived, prop = 0.7)
+titanic_split
+
+#Separate into training and testing
+titanic_train <- training(titanic_split)
+titanic_test <- testing(titanic_split)
+
+#Verify correct # of observations
+dim(titanic_train)
+dim(titanic_test)
+
+#Create a recipe for this dataset identical to the recipe used in HW3
+titanic_recipe <- recipe(survived ~ pclass + sex + age + sib_sp
+                         + parch + fare, data = titanic_train) %>%
+  step_impute_linear(age) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_interact(~ starts_with("sex"):fare) %>%
+  step_interact(~ age:fare)
+```
+
+
+### Question 2 
+Fold the training data. Use k-fold cross-validation, with k=10.
+```{r, warning=FALSE}
+titanic_folds <- vfold_cv(titanic_train, v = 10)
+titanic_folds
+```
+
+
+### Question 3 
+K-fold cross-validation is a method that randomly allocates the data in the 
+training set, in this case to 10 groups of roughly equal size, called "folds". 
+Within each fold, the data is split between an analysis set, and an assessment 
+set, similar to training and testing dataset. 10-fold CV moves iteratively 
+through all the folds which leaves 10 set of performance statistics that were 
+created on 10 data sets that were not used in the modeling process. 
+We should use this because it is an effective method for measuring model
+performance without predicting the training set directly as a whole.
+If we used the entire training set, it would be the Validation Set approach.
+
+
+### Question 4 
+```{r}
+#Logistic Regression 
+log_reg <- logistic_reg() %>%
+  set_engine("glm") %>%
+  set_mode("classification")
+
+log_wkflw <- workflow() %>%
+  add_model(log_reg) %>%
+  add_recipe(titanic_recipe)
+
+#LDA 
+lda_mod <- discrim_linear() %>%
+  set_mode("classification") %>%
+  set_engine("MASS")
+
+lda_wkflw <- workflow() %>%
+  add_model(lda_mod) %>%
+  add_recipe(titanic_recipe)
+
+#QDA 
+qda_mod <- discrim_quad() %>%
+  set_mode("classification") %>%
+  set_engine("MASS")
+
+qda_wkflw <- workflow() %>%
+  add_model(qda_mod) %>%
+  add_recipe(titanic_recipe)
+```
+ 
+In total, across all folds, there will be 30 models fitted to the data. This is 
+because there are 3 models and there are 10 folds fitted to each model.
+
+
+### Question 5 
+```{r}
+log_fit <- 
+  log_wkflw %>%
+  fit_resamples(titanic_folds)
+
+lda_fit <- 
+  lda_wkflw %>%
+  fit_resamples(titanic_folds)
+
+qda_fit <- 
+  qda_wkflw %>%
+  fit_resamples(titanic_folds)
+```
+
+### Question 6 
+```{r}
+collect_metrics(log_fit)
+
+collect_metrics(lda_fit)
+
+collect_metrics(qda_fit)
+```
+ 
+The model that performed the best was the logistic regression model, because it 
+had the highest mean accuracy and lowest standard error.
+
+
+### Question 7 
+```{r}
+log_train_fit <- fit(log_wkflw, titanic_train)
+
+log_training_pred <- 
+  predict(log_train_fit, titanic_train) %>%
+  bind_cols(predict(log_train_fit, titanic_train, type = "prob")) %>%
+  bind_cols(titanic_train %>%
+              select(survived))
+
+log_training_pred %>%
+  accuracy(truth = survived, .pred_class)
+```
+
+
+### Question 8 
+Finally, with your fitted model, use predict(), bind_cols(), and accuracy() to assess your model’s performance on the testing data!
+
+Compare your model’s testing accuracy to its average accuracy across folds. Describe what you see.
+```{r}
+log_test_fit <- fit(log_wkflw, titanic_test)
+
+log_testing_pred <- 
+  predict(log_test_fit, titanic_test) %>%
+  bind_cols(predict(log_test_fit, titanic_test, type = "prob")) %>%
+  bind_cols(titanic_test %>% select(survived))
+
+log_testing_pred %>%
+  accuracy(truth = survived, .pred_class)
+````
+
+For this model's testing accuracy it is higher than the average accuracy across 
+folds. The training accuracy seems to be closer to the average accuracy
+across the folds. Therefore cross-validation is a better way to measure accuracy.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
