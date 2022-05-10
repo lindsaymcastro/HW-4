@@ -162,9 +162,6 @@ log_training_pred %>%
 
 
 ### Question 8 
-Finally, with your fitted model, use predict(), bind_cols(), and accuracy() to assess your model’s performance on the testing data!
-
-Compare your model’s testing accuracy to its average accuracy across folds. Describe what you see.
 ```{r}
 log_test_fit <- fit(log_wkflw, titanic_test)
 
